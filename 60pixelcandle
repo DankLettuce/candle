@@ -1,0 +1,122 @@
+//Gavin McMahon 
+//adafruit neopixel candle code
+//Arduino UNO
+
+#include <Adafruit_NeoPixel.h>
+#define PIN 7
+
+//allow scalability of code -- needs to be a 'const int' in order to allow the color arrays to be scalable
+
+const int numpix = 60; //number of pixels in the circle
+
+//RBGfuture values hold the next color value
+double redfuture[numpix]; 
+double greenfuture[numpix];
+double bluefuture[numpix];
+
+//RGBcurrent values hold the color that will be written to the pixels at the completion of the loop
+double redcurrent[numpix];
+double greencurrent[numpix];
+double bluecurrent[numpix];
+
+//random color values that alter the color slightly
+int redstrength;
+int greenstrength;
+int bluestrength;
+
+//Direction indicates 
+int previousdir;
+int flamedir;
+double flamestrength;
+double layerstrength;
+int numsteps;
+
+int layers=numpix/2; //used to calculate color strength intensities based on the flame direction
+int pixelshifter; //used to alter the j value in the rayflamecalc() function to reflect the current flame direction (flamedir)
+
+//required code to initialize the neopixerls
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(numpix, PIN, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  //required code to initialize the neopixerls
+  strip.begin();
+  strip.show();
+}
+
+void loop() {
+  directioncalc();
+  rayflamecalc();
+  timecalc();
+}
+
+//directioncalc averages the new and old directions to make the flame animation look more realistic and less jittery
+void directioncalc(){
+  flamedir=random(numpix);
+  //can't just average the two numbers every time because then a number like 50 and 10 would average to 30 instead of 0
+  if(previousdir-flamedir>30 || flamedir-previousdir>30){
+    flamedir=((2*previousdir+flamedir+numpix)/3)%60;
+  }
+  else{
+    flamedir=(2*flamedir+previousdir)/3;
+  }
+  previousdir=flamedir;
+}
+
+//rayflamecalc adjusts each pixel value for the new color intensity by averaging the new and old, and also the new flamedir
+void rayflamecalc(){
+  flamestrength=random(100)/100;
+  redstrength=random(220,255);
+  greenstrength=random(80,100);
+  bluestrength=random(5,15);
+
+  for(int j = 0; j < numpix; j++){  
+    pixelshifter=(j+flamedir)%60;
+    if(j<=30){
+      redfuture[pixelshifter]=(redfuture[pixelshifter]+(redstrength-(redstrength/layers*j)))/2;
+      greenfuture[pixelshifter]=(greenfuture[pixelshifter]+(greenstrength-(greenstrength/layers*j)))/2;
+      bluefuture[pixelshifter]=(bluefuture[pixelshifter]+(bluestrength-(bluestrength/layers*j)))/2;
+    }
+    else if(j>30){
+      redfuture[pixelshifter]=(redfuture[pixelshifter]+(redstrength-((redstrength/layers)*(layers-(j-layers)))))/2;
+      greenfuture[pixelshifter]=(greenfuture[pixelshifter]+(greenstrength-((greenstrength/layers)*(layers-(j-layers)))))/2;
+      bluefuture[pixelshifter]=(bluefuture[pixelshifter]+(bluestrength-((bluestrength/layers)*(layers-(j-layers)))))/2;
+    }
+    else{
+      redfuture[pixelshifter]=0;
+    }
+    if(redfuture[pixelshifter]<0){
+      redfuture[pixelshifter]=0; 
+    }
+    if(greenfuture[pixelshifter]<0){
+      greenfuture[pixelshifter]=0; 
+    }
+    if(bluefuture[pixelshifter]<0){
+      bluefuture[pixelshifter]=0; 
+    }
+  }
+}
+
+//timecalc calculates a more gradual change from the RGBcurrent[n] value to the RGBfuture[n] value.
+//Each loop takes RGBcurrent[n] back to the original value of the first iteration of the first for loop
+//this orignal value is then used to incriment the color to the next color change step
+void timecalc(){
+  numsteps=random(5,15);
+  for(int q=1;q<=numsteps;q++){
+    for(int n = 0; n < numpix; n++){
+      redcurrent[n]=redcurrent[n]-((redfuture[n]-redcurrent[n])/numsteps)*(q-1);
+      greencurrent[n]=greencurrent[n]-((greenfuture[n]-greencurrent[n])/numsteps)*(q-1);
+      bluecurrent[n]=bluecurrent[n]-((bluefuture[n]-bluecurrent[n])/numsteps)*(q-1);
+      //resets the RGBcurrent[n] value to the original previous value.
+      redcurrent[n]=redcurrent[n]+((redfuture[n]-redcurrent[n])/numsteps)*q;
+      greencurrent[n]=greencurrent[n]+((greenfuture[n]-greencurrent[n])/numsteps)*q;
+      bluecurrent[n]=bluecurrent[n]+((bluefuture[n]-bluecurrent[n])/numsteps)*q;
+      //sets the RGBcurrent[n] value to the next incriment
+      strip.setPixelColor(n, (int)redcurrent[n], (int)greencurrent[n], (int)bluecurrent[n]);
+      //    strip.setPixelColor(n, (int)redcurrent[n], 0, 0);
+
+    }
+    strip.show();
+    //  delay(random(5,15));
+    //    delay(5);
+  }
+}
