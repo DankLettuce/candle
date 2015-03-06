@@ -1,0 +1,166 @@
+//Gavin McMahon 
+//March 6 2015
+//Adafruit neopixel_counter candle code
+//Arduino UNO
+
+#include <Adafruit_NeoPixel.h>
+#define PIN 7
+
+const int number_of_pixels = 90; 
+
+float red_future; 
+float green_future;
+float blue_future;
+
+float red_current;
+float green_current;
+float blue_current;
+
+float red_delta[number_of_pixels];
+float green_delta[number_of_pixels];
+float blue_delta[number_of_pixels];
+
+uint8_t red_past;
+uint8_t green_past;
+uint8_t blue_past;
+
+int red_random;
+int green_random;
+int blue_random;
+
+int new_flame_direction;
+int steps_to_future_color;
+int shift_pixels; 
+int flame_layers = number_of_pixels/2;
+
+int pixel_counter;
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(number_of_pixels, PIN, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  
+  strip.begin();
+  strip.show();
+}
+
+void loop() {
+  
+  random_future_color();
+  future_flame_direction();
+
+  steps_to_future_color = (steps_to_future_color + random(5,26)) / 2;
+
+  for(int j = 0; j < number_of_pixels; j++){
+    pixel_counter = j; 
+    shift_pixels = (j + new_flame_direction) % number_of_pixels;
+    future_color_gradient_across_layers();
+    change_in_color_per_pixel_per_step();
+  }
+  fade_from_past_to_future();
+}
+
+
+uint8_t read_current_color (uint32_t c, char value){
+  
+  switch (value) {
+  case 'r': 
+    return (uint8_t)(c >> 16);
+  case 'g': 
+    return (uint8_t)(c >>  8);
+  case 'b': 
+    return (uint8_t)(c >>  0);
+  default:  
+    return 0;
+  }
+}
+
+
+void future_flame_direction(){
+
+  int old_flame_direction = new_flame_direction;
+  new_flame_direction = random(number_of_pixels);
+
+  if(old_flame_direction - new_flame_direction > flame_layers || new_flame_direction - old_flame_direction > flame_layers){
+    new_flame_direction = ((old_flame_direction + new_flame_direction + number_of_pixels) / 2) % number_of_pixels;
+  }
+  else{
+    new_flame_direction = (new_flame_direction + old_flame_direction) / 2;
+  }
+}
+
+
+void random_future_color(){
+  
+  red_random=random(210,245);
+  green_random=random(75,110);
+  blue_random=random(5,20); 
+}
+
+
+void future_color_gradient_across_layers(){
+
+  red_past = read_current_color (strip.getPixelColor(shift_pixels), 'r');
+  green_past = read_current_color (strip.getPixelColor(shift_pixels), 'g');
+  blue_past = read_current_color (strip.getPixelColor(shift_pixels), 'b');
+
+  if(pixel_counter <= flame_layers){
+    red_future = 10 + (red_past + (red_random - (red_random / flame_layers * pixel_counter))) / 2;
+    green_future = 5 + (green_past + (green_random - (green_random / flame_layers * pixel_counter))) / 2;
+    blue_future = (blue_past + (blue_random - (blue_random / flame_layers * pixel_counter))) / 2;
+  }
+  else {
+    red_future = 10 + (red_past + (red_random - ((red_random / flame_layers) * (flame_layers - (pixel_counter - flame_layers))))) / 2;
+    green_future = 5 + (green_past + (green_random - ((green_random / flame_layers) * (flame_layers - (pixel_counter - flame_layers))))) / 2;
+    blue_future = (blue_past + (blue_random - ((blue_random / flame_layers) * (flame_layers - (pixel_counter - flame_layers))))) / 2;
+  }
+}
+
+
+void change_in_color_per_pixel_per_step(){
+
+  red_delta[shift_pixels] = (red_future-red_past) / steps_to_future_color;
+  green_delta[shift_pixels] = (green_future-green_past) / steps_to_future_color;
+  blue_delta[shift_pixels] = (blue_future-blue_past) / steps_to_future_color; 
+}
+
+
+void fade_from_past_to_future(){
+
+  for(int q = 1; q <= steps_to_future_color; q++){
+    for(int n = 0; n < number_of_pixels; n++){
+      red_past = read_current_color ( strip.getPixelColor(n), 'r' );
+      green_past = read_current_color ( strip.getPixelColor(n), 'g' );
+      blue_past = read_current_color ( strip.getPixelColor(n), 'b' );
+
+      red_future = red_past - red_delta[n] * (q - 1);
+      green_future = green_past - green_delta[n] * (q - 1);
+      blue_future = blue_past - blue_delta[n] * (q - 1);
+
+      red_current = red_future + red_delta[n] * q;
+      green_current = green_future + green_delta[n] * q;
+      blue_current = blue_future + blue_delta[n] * q;
+
+      if(red_current < 10){
+        red_current = 10; 
+      }
+      if(green_current < 5){
+        green_current = 5; 
+      }
+      if(blue_current < 0){
+        blue_current = 0; 
+      }
+      if(red_current > 255){
+        red_current = 255; 
+      }
+      if(green_current > 255){
+        green_current = 255; 
+      } 
+      if(blue_current > 255){
+        blue_current = 255; 
+      }
+
+      strip.setPixelColor(n, (int)red_current, (int)green_current, (int)blue_current);
+    }
+    strip.show();
+  }
+}
